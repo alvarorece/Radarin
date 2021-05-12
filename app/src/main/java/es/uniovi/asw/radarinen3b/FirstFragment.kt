@@ -106,8 +106,6 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
         binding.recyclerV.layoutManager = LinearLayoutManager(requireContext())
         foregroundOnlyBroadcastReceiver = ForegroundOnlyBroadcastReceiver()
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
-
-
         return view
     }
 
@@ -280,6 +278,17 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
                 }
             }
         }
+    }
+
+    private fun logOut() {
+        val pref = requireActivity().getPreferences(Context.MODE_PRIVATE)
+        with(pref.edit()) {
+            putString(getString(R.string.webId_preference), "")
+            putString(getString(R.string.privateKey_preference), "")
+            commit()
+        }
+        val action = FirstFragmentDirections.actionFirstFragmentToQrLoginFragment()
+        requireView().findNavController().navigate(action)
     }
 
     private suspend fun updateView(currentLocation: Location) =
