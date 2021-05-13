@@ -20,11 +20,13 @@ import androidx.navigation.findNavController
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.gms.location.LocationServices
 import com.google.android.material.snackbar.Snackbar
 import es.uniovi.asw.radarinen3b.databinding.FragmentFirstBinding
+import es.uniovi.asw.radarinen3b.dialogs.SavedLocationDialogFragment
 import es.uniovi.asw.radarinen3b.location.ForegroundOnlyLocationService
+import es.uniovi.asw.radarinen3b.location.ForegroundOnlyLocationService.Companion.getDistance
 import es.uniovi.asw.radarinen3b.location.SharedPreferenceUtil
-import es.uniovi.asw.radarinen3b.models.Coords
 import es.uniovi.asw.radarinen3b.models.Friend
 import es.uniovi.asw.radarinen3b.models.User
 import kotlinx.coroutines.*
@@ -35,7 +37,7 @@ import kotlinx.coroutines.*
 private const val REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE = 34
 private const val TAG = "FirstFragment"
 
-class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListener {
+class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListener{
     private lateinit var user: User
     private lateinit var binding: FragmentFirstBinding
     private lateinit var friends: MutableList<Friend>
@@ -85,7 +87,22 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
     ): View? {
         binding = FragmentFirstBinding.inflate(layoutInflater, container, false)
         val view = binding.root
+        val divider =
+            DividerItemDecoration(binding.recyclerV.context, DividerItemDecoration.VERTICAL)
+        binding.recyclerV.addItemDecoration(divider)
+        friends = mutableListOf()
+        val adapter = CustomAdapter(
+            friends
+        )
+        binding.recyclerV.adapter = adapter
+        binding.recyclerV.layoutManager = LinearLayoutManager(requireContext())
 
+        return view
+    }
+
+    @SuppressLint("MissingPermission")
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
         val pref = requireActivity().getPreferences(Context.MODE_PRIVATE)
         val webIdPref = pref.getString(getString(R.string.webId_preference), "")
         val privatePref = pref.getString(getString(R.string.privateKey_preference), "")
@@ -94,26 +111,28 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             view.findNavController().navigate(action)
         } else {
             user = User(webIdPref!!, privatePref!!)
+            foregroundOnlyBroadcastReceiver = ForegroundOnlyBroadcastReceiver()
+            sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
+            LocationsService.webId = user.webId
+            LocationsService.prKey = user.privateKey
+            val lClient = LocationServices.getFusedLocationProviderClient(requireContext())
+            val location = lClient.lastLocation.addOnSuccessListener { l ->
+                CoroutineScope(Dispatchers.IO).launch { updateView(l) }
+            }
+            binding.swipe.setOnRefreshListener {
+                lClient.lastLocation.addOnSuccessListener { l ->
+                    CoroutineScope(Dispatchers.IO).launch { updateView(l) }.invokeOnCompletion {
+                        binding.swipe.isRefreshing = false
+                    }
+                }
+            }
+            binding.floatingActionButton.setOnClickListener {
+                lClient.lastLocation.addOnSuccessListener {
+                    SavedLocationDialogFragment(it.longitude.toInt(), it.latitude.toInt())
+                        .show(parentFragmentManager, "Location")
+                }
+            }
         }
-        friends = mutableListOf()
-        val adapter = CustomAdapter(
-            friends
-        )
-        val divider =
-            DividerItemDecoration(binding.recyclerV.context, DividerItemDecoration.VERTICAL)
-        binding.recyclerV.addItemDecoration(divider)
-        binding.recyclerV.adapter = adapter
-        binding.recyclerV.layoutManager = LinearLayoutManager(requireContext())
-        foregroundOnlyBroadcastReceiver = ForegroundOnlyBroadcastReceiver()
-        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        return view
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        LocationsService.webId = user.webId
-        LocationsService.prKey = user.privateKey
-
     }
 
     override fun onStart() {
@@ -165,7 +184,7 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
     // TODO: Step 1.0, Review Permissions: Method checks if permissions approved.
     private fun foregroundPermissionApproved(): Boolean {
         return PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(
-            requireContext(),
+            requireActivity(),
             Manifest.permission.ACCESS_FINE_LOCATION
         )
     }
@@ -251,18 +270,6 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun getDistance(userLocation: Location, coords: Coords): Float {
-        val result = FloatArray(3)
-        Location.distanceBetween(
-            userLocation.latitude,
-            userLocation.longitude,
-            coords.latitude,
-            coords.longitude,
-            result
-        );
-        return result[0]
-    }
-
     /**
      * Receiver for location broadcasts from [ForegroundOnlyLocationService].
      */
@@ -302,16 +309,25 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
                     LocationsService.api.getLocation(fr.webId, true)
                 }
             }
-            val locations = task.await().filter { r -> r.body() != null }.map { f -> f.body() }
-            fetchedFriends.forEach { friend ->
-                val find = locations.find { location -> friend.webId == location?.webId }
-                friend.location = find?.coords
-                friend.distance = friend.location?.let { getDistance(currentLocation, it).toInt() }
-            }
-            requireActivity().runOnUiThread {
-                friends.clear()
-                friends.addAll(fetchedFriends)
-                binding.recyclerV.adapter?.notifyDataSetChanged()
+            val locationResponses = task.await()
+
+            // If everyone, else is just removed friend
+            if (locationResponses.all { response -> response.code() == 401 }) {
+                logOut()
+            } else {
+                val locations =
+                    locationResponses.filter { r -> r.body() != null }.map { f -> f.body() }
+                fetchedFriends.forEach { friend ->
+                    val find = locations.find { location -> friend.webId == location?.webId }
+                    friend.location = find?.coords
+                    friend.distance =
+                        friend.location?.let { getDistance(currentLocation, it).toInt() }
+                }
+                requireActivity().runOnUiThread {
+                    friends.clear()
+                    friends.addAll(fetchedFriends)
+                    binding.recyclerV.adapter?.notifyDataSetChanged()
+                }
             }
         }
 
@@ -322,4 +338,6 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
     }
+
+
 }

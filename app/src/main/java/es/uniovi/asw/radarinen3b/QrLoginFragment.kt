@@ -183,6 +183,7 @@ class QrLoginFragment : Fragment() {
                 }
             }
     }
+
     private class QrAnalyzer(val context: Context, val fn: (String) -> Unit) :
         ImageAnalysis.Analyzer {
 

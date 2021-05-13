@@ -42,5 +42,10 @@
     <string name="attachment_summary_on">Automatically download attachments for incoming emails
     </string>
     <string name="attachment_summary_off">Only download attachments when manually requested</string>
+    <string name="cancel">Cancel</string>
+
+    <string name="saved_location_name">Name</string>
+    <string name="saved_location_description">Description</string>
+    <string name="saved_location_create">Create</string>
 
 </resources>

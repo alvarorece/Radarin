@@ -28,13 +28,13 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.location.*
-import es.uniovi.asw.radarinen3b.LocationsService
-import es.uniovi.asw.radarinen3b.MainActivity
+import es.uniovi.asw.radarinen3b.*
 import es.uniovi.asw.radarinen3b.R
 import es.uniovi.asw.radarinen3b.models.Coords
 import es.uniovi.asw.radarinen3b.models.LocationPost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
@@ -124,12 +124,42 @@ class ForegroundOnlyLocationService : Service() {
                         longitude = currentLocation!!.longitude
                     )
                     val webId = applicationContext.getSharedPreferences(
-                        MainActivity::class.java.toString(),
+                        "MainActivity",
                         Context.MODE_PRIVATE
                     ).getString(getString(R.string.webId_preference), "")
                     val post = LocationPost(webId!!, coords, currentLocation!!.time)
+
                     CoroutineScope(Dispatchers.IO).launch {
                         LocationsService.api.saveLocation(post)
+                        val friendsTask = async { RDFStore.getFriends(webId!!) }
+                        val fetchedFriends = friendsTask.await()
+                        val task = async {
+                            fetchedFriends.map { fr ->
+                                LocationsService.api.getLocation(fr.webId, true)
+                            }
+                        }
+                        val locationResponses = task.await()
+                        val locations =
+                            locationResponses.filter { r -> r.body() != null }.map { f -> f.body() }
+                        fetchedFriends.forEach { friend ->
+                            val find =
+                                locations.find { location -> friend.webId == location?.webId }
+                            friend.location = find?.coords
+                            friend.distance =
+                                friend.location?.let { getDistance(currentLocation!!, it).toInt() }
+                        }
+                        if (serviceRunningInForeground) {
+                            val notStr = fetchedFriends.map { fr -> fr.fn ?: fr.webId }
+                                .fold(
+                                    "The following friends are nearby: ",
+                                    { acc, s -> "$acc$s, " })
+                            fetchedFriends.forEach { fr ->
+                                notificationManager.notify(
+                                    FRIENDS_NOTIFICATION_ID,
+                                    generateNotificationNewFriend(notStr)
+                                )
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, e.toString());
@@ -333,6 +363,40 @@ class ForegroundOnlyLocationService : Service() {
             .build()
     }
 
+    private fun generateNotificationNewFriend(str: String): Notification {
+        Log.d(TAG, "generateNotificationNewFriend()")
+
+        val titleText = "Friend nearby"
+
+        // 1. Create Notification Channel for O+ and beyond devices (26+).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+            val notificationChannel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID, titleText, NotificationManager.IMPORTANCE_DEFAULT
+            )
+
+            notificationManager.createNotificationChannel(notificationChannel)
+        }
+
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .bigText(str)
+            .setBigContentTitle(titleText)
+
+        // 4. Build and issue the notification.
+        // Notification Channel Id is ignored for Android pre O (26).
+        val notificationCompatBuilder =
+            NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+
+        return notificationCompatBuilder
+            .setStyle(bigTextStyle)
+            .setContentTitle(titleText)
+            .setContentText(str)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+    }
+
     /**
      * Class used for the client Binder.  Since this service runs in the same process as its
      * clients, we don't need to deal with IPC.
@@ -345,18 +409,37 @@ class ForegroundOnlyLocationService : Service() {
     companion object {
         private const val TAG = "ForegroundOnlyLocationService"
 
-        private const val PACKAGE_NAME = "com.example.android.whileinuselocation"
+        private const val PACKAGE_NAME = "es.uniovi.asw.radarinen3b"
 
         internal const val ACTION_FOREGROUND_ONLY_LOCATION_BROADCAST =
             "$PACKAGE_NAME.action.FOREGROUND_ONLY_LOCATION_BROADCAST"
 
         internal const val EXTRA_LOCATION = "$PACKAGE_NAME.extra.LOCATION"
 
+        internal const val LOGGED_OUT = "$PACKAGE_NAME.extra.LOGGED_OUT"
+
         private const val EXTRA_CANCEL_LOCATION_TRACKING_FROM_NOTIFICATION =
             "$PACKAGE_NAME.extra.CANCEL_LOCATION_TRACKING_FROM_NOTIFICATION"
 
-        private const val NOTIFICATION_ID = 12345678
+        private const val NOTIFICATION_ID = 12345675
+
+        private const val FRIENDS_NOTIFICATION_ID = 12345679
+
+
+        internal const val NEAR_METERS = 2000
 
         private const val NOTIFICATION_CHANNEL_ID = "while_in_use_channel_01"
+
+        public fun getDistance(userLocation: Location, coords: Coords): Float {
+            val result = FloatArray(3)
+            Location.distanceBetween(
+                userLocation.latitude,
+                userLocation.longitude,
+                coords.latitude,
+                coords.longitude,
+                result
+            );
+            return result[0]
+        }
     }
 }
