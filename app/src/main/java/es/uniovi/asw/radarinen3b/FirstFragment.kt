@@ -15,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.findNavController
 import androidx.preference.PreferenceManager
@@ -51,6 +52,8 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
     private lateinit var foregroundOnlyBroadcastReceiver: ForegroundOnlyBroadcastReceiver
 
     private lateinit var sharedPreferences: SharedPreferences
+
+    private val model: FriendsViewModel by viewModels()
 
     private val foregroundOnlyServiceConnection = object : ServiceConnection {
 
@@ -299,36 +302,10 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
     }
 
     private suspend fun updateView(currentLocation: Location) =
-        coroutineScope {
-            val pref = requireActivity().getPreferences(Context.MODE_PRIVATE)
-            val webId = pref.getString(getString(R.string.webId_preference), "")
-            val friendsTask = async { RDFStore.getFriends(webId!!) }
-            val fetchedFriends = friendsTask.await()
-            val task = async {
-                fetchedFriends.map { fr ->
-                    LocationsService.api.getLocation(fr.webId, true)
-                }
-            }
-            val locationResponses = task.await()
 
-            // If everyone, else is just removed friend
-            if (locationResponses.all { response -> response.code() == 401 }) {
-                logOut()
-            } else {
-                val locations =
-                    locationResponses.filter { r -> r.body() != null }.map { f -> f.body() }
-                fetchedFriends.forEach { friend ->
-                    val find = locations.find { location -> friend.webId == location?.webId }
-                    friend.location = find?.coords
-                    friend.distance =
-                        friend.location?.let { getDistance(currentLocation, it).toInt() }
-                }
-                requireActivity().runOnUiThread {
                     friends.clear()
                     friends.addAll(fetchedFriends)
                     binding.recyclerV.adapter?.notifyDataSetChanged()
-                }
-            }
         }
 
     companion object {
