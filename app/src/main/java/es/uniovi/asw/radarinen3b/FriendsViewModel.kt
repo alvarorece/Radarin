@@ -24,7 +24,7 @@ class FriendsViewModel : ViewModel() {
     val users: LiveData<List<Friend>> = _users
 
     init {
-        loadData()
+//        loadData()
     }
 
     fun loadData() {
@@ -62,9 +62,9 @@ class FriendsViewModel : ViewModel() {
 
     private suspend fun loadFriends() = coroutineScope {
         val webId = user.webId
-        val friendsTask = async { RDFStore.getFriends(webId) }
+        val friendsTask = async(Dispatchers.IO) { RDFStore.getFriends(webId) }
         val friends = friendsTask.await()
-        val locationResponses = (async {
+        val locationResponses = (async(Dispatchers.IO) {
             friends.map { fr -> LocationsService.api.getLocation(fr.webId, true) }
         }).await()
         val banned = locationResponses.all { lR -> lR.code() == 401 }

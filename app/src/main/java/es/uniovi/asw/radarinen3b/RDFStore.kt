@@ -20,13 +20,19 @@ class RDFStore() {
                     "WHERE {" +
                     "GRAPH ?g { ?person foaf:name ?name . }" +
                     "}"
+        )
+
+        private val getPhotoQuery = db.connection.prepareTupleQuery(
+            "PREFIX vcard:  <http://www.w3.org/2006/vcard/ns#>" +
+                    " SELECT ?photo" +
+                    " WHERE { GRAPH ?g { ?person vcard:hasPhoto ?photo . } }"
         );
 
         private val getFriendsQuery = db.connection.prepareTupleQuery(
             "SELECT ?friend WHERE {" +
                     " GRAPH ?g {  ?person <http://xmlns.com/foaf/0.1/knows> ?friend . } " +
                     "}"
-        );
+        )
 
         fun getName(webId: String): String {
             val connection = db.connection
@@ -34,7 +40,34 @@ class RDFStore() {
                 val url = URL(webId.removeSuffix("#me"))
                 connection.add(url, url.toString(), RDFFormat.TURTLE, Values.iri(webId))
                 getNameQuery.setBinding("g", Values.iri(webId))
-                return getNameQuery.evaluate().next().getValue("name").stringValue()
+                val evaluated = getNameQuery.evaluate()
+                try {
+                    if (!evaluated.hasNext())
+                        return ""
+                    return evaluated.next().getValue("name").stringValue()
+                } finally {
+                    evaluated.close()
+                }
+            } finally {
+                connection.close()
+            }
+        }
+
+        fun getPhoto(webId: String): String {
+            val connection = db.connection
+            try {
+                val url = URL(webId.removeSuffix("#me"))
+                connection.add(url, url.toString(), RDFFormat.TURTLE, Values.iri(webId))
+                getPhotoQuery.setBinding("g", Values.iri(webId))
+                val evaluated = getPhotoQuery.evaluate()
+                try {
+                    if (!evaluated.hasNext())
+                        return ""
+                    return evaluated.next().getValue("photo")
+                        .stringValue()
+                } finally {
+                    evaluated.close()
+                }
             } finally {
                 connection.close()
             }
@@ -54,7 +87,7 @@ class RDFStore() {
                 val realFriends = iKnow.filter { fr ->
                     getFriendsList(fr).contains(webId)
                 }
-                return realFriends.map { Friend(it, getName(it)) };
+                return realFriends.map { Friend(it, getName(it), imgSrcUrl = getPhoto(it)) };
             } finally {
                 connection.close()
             }

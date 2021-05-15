@@ -26,11 +26,11 @@ import com.google.android.material.snackbar.Snackbar
 import es.uniovi.asw.radarinen3b.databinding.FragmentFirstBinding
 import es.uniovi.asw.radarinen3b.dialogs.SavedLocationDialogFragment
 import es.uniovi.asw.radarinen3b.location.ForegroundOnlyLocationService
-import es.uniovi.asw.radarinen3b.location.ForegroundOnlyLocationService.Companion.getDistance
 import es.uniovi.asw.radarinen3b.location.SharedPreferenceUtil
-import es.uniovi.asw.radarinen3b.models.Friend
 import es.uniovi.asw.radarinen3b.models.User
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * A simple [Fragment] subclass as the default destination in the navigation.
@@ -38,10 +38,8 @@ import kotlinx.coroutines.*
 private const val REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE = 34
 private const val TAG = "FirstFragment"
 
-class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListener{
-    private lateinit var user: User
+class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListener {
     private lateinit var binding: FragmentFirstBinding
-    private lateinit var friends: MutableList<Friend>
 
     private var foregroundOnlyLocationServiceBound = false
 
@@ -93,13 +91,12 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
         val divider =
             DividerItemDecoration(binding.recyclerV.context, DividerItemDecoration.VERTICAL)
         binding.recyclerV.addItemDecoration(divider)
-        friends = mutableListOf()
-        val adapter = CustomAdapter(
-            friends
-        )
+        val adapter = CustomAdapter()
+        model
+        binding.lifecycleOwner = this
+        binding.viewModel = model
         binding.recyclerV.adapter = adapter
         binding.recyclerV.layoutManager = LinearLayoutManager(requireContext())
-
         return view
     }
 
@@ -113,18 +110,22 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             val action = FirstFragmentDirections.actionFirstFragmentToQrLoginFragment()
             view.findNavController().navigate(action)
         } else {
-            user = User(webIdPref!!, privatePref!!)
+            model.user = User(webIdPref!!, privatePref!!)
             foregroundOnlyBroadcastReceiver = ForegroundOnlyBroadcastReceiver()
             sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
-            LocationsService.webId = user.webId
-            LocationsService.prKey = user.privateKey
+            LocationsService.webId = model.user.webId
+            LocationsService.prKey = model.user.privateKey
             val lClient = LocationServices.getFusedLocationProviderClient(requireContext())
-            val location = lClient.lastLocation.addOnSuccessListener { l ->
-                CoroutineScope(Dispatchers.IO).launch { updateView(l) }
-            }
+//            lClient.lastLocation.addOnSuccessListener { l ->
+//                CoroutineScope(Dispatchers.IO).launch {
+//                    model.updateFriends(l)
+//                }
+//            }
             binding.swipe.setOnRefreshListener {
                 lClient.lastLocation.addOnSuccessListener { l ->
-                    CoroutineScope(Dispatchers.IO).launch { updateView(l) }.invokeOnCompletion {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        model.updateFriends(l)
+                    }.invokeOnCompletion {
                         binding.swipe.isRefreshing = false
                     }
                 }
@@ -284,7 +285,7 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             )
             if (location != null) {
                 CoroutineScope(Dispatchers.IO).launch {
-                    updateView(location)
+                    model.updateFriends(location)
                 }
             }
         }
@@ -301,13 +302,6 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
         requireView().findNavController().navigate(action)
     }
 
-    private suspend fun updateView(currentLocation: Location) =
-
-                    friends.clear()
-                    friends.addAll(fetchedFriends)
-                    binding.recyclerV.adapter?.notifyDataSetChanged()
-        }
-
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 12
         private val REQUIRED_PERMISSIONS = arrayOf(
@@ -315,6 +309,5 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
     }
-
-
 }
+
