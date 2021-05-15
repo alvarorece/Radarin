@@ -6,4 +6,7 @@ data class Friend(
     var imgSrcUrl: String? = null,
     var location: Coords? = null,
     var distance: Int? = null
-)
+) {
+    val isNear: Boolean
+        get() = this.distance != null && distance!! < 2000
+}

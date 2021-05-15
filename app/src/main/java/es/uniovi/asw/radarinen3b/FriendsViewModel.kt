@@ -11,7 +11,7 @@ import es.uniovi.asw.radarinen3b.models.User
 import kotlinx.coroutines.*
 
 class FriendsViewModel : ViewModel() {
-    lateinit var user: User
+    lateinit var user: MutableLiveData<User>
 
     val isBanned = MutableLiveData(false)
 
@@ -23,9 +23,8 @@ class FriendsViewModel : ViewModel() {
     private val _users = MutableLiveData<List<Friend>>()
     val users: LiveData<List<Friend>> = _users
 
-    init {
-//        loadData()
-    }
+    private val _offlineUsers = MutableLiveData<List<Friend>>()
+    val offlineUsers: LiveData<List<Friend>> = _offlineUsers
 
     fun loadData() {
         viewModelScope.launch {
@@ -44,8 +43,10 @@ class FriendsViewModel : ViewModel() {
         viewModelScope.launch {
             _status.value = FriendsStatus.LOADING
             try {
-                _users.value = loadFriends()
-                updateDistances(location)
+                val aux = loadFriends()
+                updateDistances(aux, location)
+                _users.value = aux.filter { fr -> fr.isNear }
+                _offlineUsers.value = aux.filter { fr -> !fr.isNear }
                 _status.value = FriendsStatus.DONE
             } catch (e: Exception) {
                 _status.value = FriendsStatus.ERROR
@@ -54,14 +55,14 @@ class FriendsViewModel : ViewModel() {
         }
     }
 
-    fun updateDistances(location: Location) {
-        _users.value?.forEach { fr ->
+    fun updateDistances(friends: List<Friend>, location: Location) {
+        friends.forEach { fr ->
             fr.distance = fr.location?.let { getDistance(location, it).toInt() }
         }
     }
 
     private suspend fun loadFriends() = coroutineScope {
-        val webId = user.webId
+        val webId = user.value?.webId ?: throw Exception("No id init")
         val friendsTask = async(Dispatchers.IO) { RDFStore.getFriends(webId) }
         val friends = friendsTask.await()
         val locationResponses = (async(Dispatchers.IO) {
@@ -79,7 +80,7 @@ class FriendsViewModel : ViewModel() {
         return@coroutineScope friends
     }
 
-    fun getDistance(userLocation: Location, coords: Coords): Float {
+    private fun getDistance(userLocation: Location, coords: Coords): Float {
         val result = FloatArray(3)
         Location.distanceBetween(
             userLocation.latitude,
@@ -89,5 +90,9 @@ class FriendsViewModel : ViewModel() {
             result
         );
         return result[0]
+    }
+
+    companion object {
+        internal const val NEAR_METERS = 2000
     }
 }

@@ -15,14 +15,15 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.MutableLiveData
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.findNavController
 import androidx.preference.PreferenceManager
-import androidx.recyclerview.widget.DividerItemDecoration
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.google.android.gms.location.LocationServices
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.tabs.TabLayoutMediator
 import es.uniovi.asw.radarinen3b.databinding.FragmentFirstBinding
 import es.uniovi.asw.radarinen3b.dialogs.SavedLocationDialogFragment
 import es.uniovi.asw.radarinen3b.location.ForegroundOnlyLocationService
@@ -51,7 +52,7 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
 
     private lateinit var sharedPreferences: SharedPreferences
 
-    private val model: FriendsViewModel by viewModels()
+    private val model: FriendsViewModel by activityViewModels()
 
     private val foregroundOnlyServiceConnection = object : ServiceConnection {
 
@@ -88,15 +89,9 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
     ): View? {
         binding = FragmentFirstBinding.inflate(layoutInflater, container, false)
         val view = binding.root
-        val divider =
-            DividerItemDecoration(binding.recyclerV.context, DividerItemDecoration.VERTICAL)
-        binding.recyclerV.addItemDecoration(divider)
-        val adapter = CustomAdapter()
-        model
         binding.lifecycleOwner = this
         binding.viewModel = model
-        binding.recyclerV.adapter = adapter
-        binding.recyclerV.layoutManager = LinearLayoutManager(requireContext())
+//        ((AppCompatActivity)requireActivity()).setSupportActionBar(binding.toolbar)
         return view
     }
 
@@ -110,26 +105,36 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             val action = FirstFragmentDirections.actionFirstFragmentToQrLoginFragment()
             view.findNavController().navigate(action)
         } else {
-            model.user = User(webIdPref!!, privatePref!!)
+            model.user = MutableLiveData<User>(User(webIdPref!!, privatePref!!))
+            binding.viewPager.adapter = object : FragmentStateAdapter(this) {
+                override fun createFragment(position: Int): Fragment {
+                    return when (position) {
+                        0 -> OnlineFriendsFragment()
+                        else -> OfflineFriendsFragment()
+                    }
+                }
+
+                override fun getItemCount(): Int {
+                    return 2
+                }
+            }
+            TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
+                when (position) {
+                    0 -> tab.text = "Online"
+                    else -> tab.text = "Disconnected"
+                }
+            }.attach()
+
             foregroundOnlyBroadcastReceiver = ForegroundOnlyBroadcastReceiver()
             sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
-            LocationsService.webId = model.user.webId
-            LocationsService.prKey = model.user.privateKey
+            LocationsService.webId = model.user.value!!.webId
+            LocationsService.prKey = model.user.value!!.privateKey
             val lClient = LocationServices.getFusedLocationProviderClient(requireContext())
 //            lClient.lastLocation.addOnSuccessListener { l ->
 //                CoroutineScope(Dispatchers.IO).launch {
 //                    model.updateFriends(l)
 //                }
-//            }
-            binding.swipe.setOnRefreshListener {
-                lClient.lastLocation.addOnSuccessListener { l ->
-                    CoroutineScope(Dispatchers.IO).launch {
-                        model.updateFriends(l)
-                    }.invokeOnCompletion {
-                        binding.swipe.isRefreshing = false
-                    }
-                }
-            }
+
             binding.floatingActionButton.setOnClickListener {
                 lClient.lastLocation.addOnSuccessListener {
                     SavedLocationDialogFragment(it.longitude.toInt(), it.latitude.toInt())
