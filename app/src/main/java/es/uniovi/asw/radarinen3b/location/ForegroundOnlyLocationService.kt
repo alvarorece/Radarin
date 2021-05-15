@@ -148,17 +148,17 @@ class ForegroundOnlyLocationService : Service() {
                             friend.distance =
                                 friend.location?.let { getDistance(currentLocation!!, it).toInt() }
                         }
-                        if (serviceRunningInForeground) {
-                            val notStr = fetchedFriends.map { fr -> fr.fn ?: fr.webId }
+                        val closeFriends = fetchedFriends.filter { fr -> fr.isNear }
+                        if (serviceRunningInForeground && closeFriends.isNotEmpty()) {
+                            val notStr = closeFriends.map { fr -> fr.fn ?: fr.webId }
                                 .fold(
                                     "The following friends are nearby: ",
-                                    { acc, s -> "$acc$s, " })
-                            fetchedFriends.forEach { fr ->
-                                notificationManager.notify(
-                                    FRIENDS_NOTIFICATION_ID,
-                                    generateNotificationNewFriend(notStr)
-                                )
-                            }
+                                    { acc, s -> "$acc$s, " }).removeSuffix(", ")
+
+                            notificationManager.notify(
+                                FRIENDS_NOTIFICATION_ID,
+                                generateNotificationNewFriend(notStr)
+                            )
                         }
                     }
                 } catch (e: Exception) {

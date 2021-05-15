@@ -2,21 +2,39 @@ package es.uniovi.asw.radarinen3b
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import es.uniovi.asw.radarinen3b.databinding.RecyclerViewItemBinding
 import es.uniovi.asw.radarinen3b.models.Friend
 
-class CustomAdapter(private val dataSet: List<Friend>) :
-    RecyclerView.Adapter<CustomAdapter.ViewHolder>() {
+class CustomAdapter() :
+    ListAdapter<Friend, CustomAdapter.ViewHolder>(DiffCallback) {
     private lateinit var binding: RecyclerViewItemBinding
 
     /**
      * Provide a reference to the type of views that you are using
      * (custom ViewHolder).
      */
-    class ViewHolder(binding: RecyclerViewItemBinding) : RecyclerView.ViewHolder(binding.root) {
-        init {
+    class ViewHolder(private var binding: RecyclerViewItemBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+        fun bind(friend: Friend) {
+            binding.friend = friend
+            // This is important, because it forces the data binding to execute immediately,
+            // which allows the RecyclerView to make the correct view size measurements
+            binding.executePendingBindings()
+        }
+    }
 
+
+    companion object DiffCallback : DiffUtil.ItemCallback<Friend>() {
+        override fun areItemsTheSame(oldItem: Friend, newItem: Friend): Boolean {
+            return oldItem.webId == newItem.webId
+        }
+
+        override fun areContentsTheSame(oldItem: Friend, newItem: Friend): Boolean {
+            return (oldItem.distance == null && newItem.distance == null || newItem.distance != null && oldItem.distance != null || oldItem.distance == newItem.distance)
+                    && (oldItem.location == null && newItem.location == null || newItem.location != null && oldItem.location != null || oldItem.location == newItem.location)
         }
     }
 
@@ -30,19 +48,7 @@ class CustomAdapter(private val dataSet: List<Friend>) :
 
     // Replace the contents of a view (invoked by the layout manager)
     override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
-
-        // Get element from your dataset at this position and replace the
-        // contents of the view with that element
-         val friend = dataSet[position]
-        binding.NameTxt.text = friend.fn
-        binding.webIdTxt.text = friend.webId
-        if (friend.distance == null)
-            binding.distanceTxt.text = "Disconnected"
-        else
-            binding.distanceTxt.text = "${friend.distance}m"
+        val friend = getItem(position)
+        viewHolder.bind(friend);
     }
-
-    // Return the size of your dataset (invoked by the layout manager)
-    override fun getItemCount() = dataSet.size
-
-}
+    }

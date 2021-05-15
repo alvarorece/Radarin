@@ -15,21 +15,23 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.MutableLiveData
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.findNavController
 import androidx.preference.PreferenceManager
-import androidx.recyclerview.widget.DividerItemDecoration
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.google.android.gms.location.LocationServices
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.tabs.TabLayoutMediator
 import es.uniovi.asw.radarinen3b.databinding.FragmentFirstBinding
 import es.uniovi.asw.radarinen3b.dialogs.SavedLocationDialogFragment
 import es.uniovi.asw.radarinen3b.location.ForegroundOnlyLocationService
-import es.uniovi.asw.radarinen3b.location.ForegroundOnlyLocationService.Companion.getDistance
 import es.uniovi.asw.radarinen3b.location.SharedPreferenceUtil
-import es.uniovi.asw.radarinen3b.models.Friend
 import es.uniovi.asw.radarinen3b.models.User
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * A simple [Fragment] subclass as the default destination in the navigation.
@@ -37,10 +39,8 @@ import kotlinx.coroutines.*
 private const val REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE = 34
 private const val TAG = "FirstFragment"
 
-class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListener{
-    private lateinit var user: User
+class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListener {
     private lateinit var binding: FragmentFirstBinding
-    private lateinit var friends: MutableList<Friend>
 
     private var foregroundOnlyLocationServiceBound = false
 
@@ -51,6 +51,8 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
     private lateinit var foregroundOnlyBroadcastReceiver: ForegroundOnlyBroadcastReceiver
 
     private lateinit var sharedPreferences: SharedPreferences
+
+    private val model: FriendsViewModel by activityViewModels()
 
     private val foregroundOnlyServiceConnection = object : ServiceConnection {
 
@@ -87,16 +89,9 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
     ): View? {
         binding = FragmentFirstBinding.inflate(layoutInflater, container, false)
         val view = binding.root
-        val divider =
-            DividerItemDecoration(binding.recyclerV.context, DividerItemDecoration.VERTICAL)
-        binding.recyclerV.addItemDecoration(divider)
-        friends = mutableListOf()
-        val adapter = CustomAdapter(
-            friends
-        )
-        binding.recyclerV.adapter = adapter
-        binding.recyclerV.layoutManager = LinearLayoutManager(requireContext())
-
+        binding.lifecycleOwner = this
+        binding.viewModel = model
+//        ((AppCompatActivity)requireActivity()).setSupportActionBar(binding.toolbar)
         return view
     }
 
@@ -110,22 +105,36 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             val action = FirstFragmentDirections.actionFirstFragmentToQrLoginFragment()
             view.findNavController().navigate(action)
         } else {
-            user = User(webIdPref!!, privatePref!!)
-            foregroundOnlyBroadcastReceiver = ForegroundOnlyBroadcastReceiver()
-            sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
-            LocationsService.webId = user.webId
-            LocationsService.prKey = user.privateKey
-            val lClient = LocationServices.getFusedLocationProviderClient(requireContext())
-            val location = lClient.lastLocation.addOnSuccessListener { l ->
-                CoroutineScope(Dispatchers.IO).launch { updateView(l) }
-            }
-            binding.swipe.setOnRefreshListener {
-                lClient.lastLocation.addOnSuccessListener { l ->
-                    CoroutineScope(Dispatchers.IO).launch { updateView(l) }.invokeOnCompletion {
-                        binding.swipe.isRefreshing = false
+            model.user = MutableLiveData<User>(User(webIdPref!!, privatePref!!))
+            binding.viewPager.adapter = object : FragmentStateAdapter(this) {
+                override fun createFragment(position: Int): Fragment {
+                    return when (position) {
+                        0 -> OnlineFriendsFragment()
+                        else -> OfflineFriendsFragment()
                     }
                 }
+
+                override fun getItemCount(): Int {
+                    return 2
+                }
             }
+            TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
+                when (position) {
+                    0 -> tab.text = "Online"
+                    else -> tab.text = "Disconnected"
+                }
+            }.attach()
+
+            foregroundOnlyBroadcastReceiver = ForegroundOnlyBroadcastReceiver()
+            sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
+            LocationsService.webId = model.user.value!!.webId
+            LocationsService.prKey = model.user.value!!.privateKey
+            val lClient = LocationServices.getFusedLocationProviderClient(requireContext())
+//            lClient.lastLocation.addOnSuccessListener { l ->
+//                CoroutineScope(Dispatchers.IO).launch {
+//                    model.updateFriends(l)
+//                }
+
             binding.floatingActionButton.setOnClickListener {
                 lClient.lastLocation.addOnSuccessListener {
                     SavedLocationDialogFragment(it.longitude.toInt(), it.latitude.toInt())
@@ -281,7 +290,7 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             )
             if (location != null) {
                 CoroutineScope(Dispatchers.IO).launch {
-                    updateView(location)
+                    model.updateFriends(location)
                 }
             }
         }
@@ -298,39 +307,6 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
         requireView().findNavController().navigate(action)
     }
 
-    private suspend fun updateView(currentLocation: Location) =
-        coroutineScope {
-            val pref = requireActivity().getPreferences(Context.MODE_PRIVATE)
-            val webId = pref.getString(getString(R.string.webId_preference), "")
-            val friendsTask = async { RDFStore.getFriends(webId!!) }
-            val fetchedFriends = friendsTask.await()
-            val task = async {
-                fetchedFriends.map { fr ->
-                    LocationsService.api.getLocation(fr.webId, true)
-                }
-            }
-            val locationResponses = task.await()
-
-            // If everyone, else is just removed friend
-            if (locationResponses.all { response -> response.code() == 401 }) {
-                logOut()
-            } else {
-                val locations =
-                    locationResponses.filter { r -> r.body() != null }.map { f -> f.body() }
-                fetchedFriends.forEach { friend ->
-                    val find = locations.find { location -> friend.webId == location?.webId }
-                    friend.location = find?.coords
-                    friend.distance =
-                        friend.location?.let { getDistance(currentLocation, it).toInt() }
-                }
-                requireActivity().runOnUiThread {
-                    friends.clear()
-                    friends.addAll(fetchedFriends)
-                    binding.recyclerV.adapter?.notifyDataSetChanged()
-                }
-            }
-        }
-
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 12
         private val REQUIRED_PERMISSIONS = arrayOf(
@@ -338,6 +314,5 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
     }
-
-
 }
+
