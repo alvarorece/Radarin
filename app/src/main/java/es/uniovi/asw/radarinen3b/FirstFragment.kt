@@ -105,7 +105,9 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             val action = FirstFragmentDirections.actionFirstFragmentToQrLoginFragment()
             view.findNavController().navigate(action)
         } else {
+            model.isBanned.value = false;
             model.user = MutableLiveData<User>(User(webIdPref!!, privatePref!!))
+            model.isBanned.observeForever { if (it == true) logOut() }
             binding.viewPager.adapter = object : FragmentStateAdapter(this) {
                 override fun createFragment(position: Int): Fragment {
                     return when (position) {
@@ -208,7 +210,7 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             Snackbar.make(
                 requireView(),
                 R.string.permission_rationale,
-                Snackbar.LENGTH_LONG
+                Snackbar.LENGTH_INDEFINITE
             )
                 .setAction(R.string.ok) {
                     // Request permission
@@ -303,6 +305,10 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             putString(getString(R.string.privateKey_preference), "")
             commit()
         }
+        Snackbar.make(requireView(), "Logged out! Please, scan QR again", Snackbar.LENGTH_INDEFINITE)
+            .setAction("OK") {
+            }
+            .show()
         val action = FirstFragmentDirections.actionFirstFragmentToQrLoginFragment()
         requireView().findNavController().navigate(action)
     }
