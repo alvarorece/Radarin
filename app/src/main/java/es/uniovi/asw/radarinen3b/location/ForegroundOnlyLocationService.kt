@@ -295,22 +295,14 @@ class ForegroundOnlyLocationService : Service() {
     private fun generateNotification(location: Location?): Notification {
         Log.d(TAG, "generateNotification()")
 
-        // Main steps for building a BIG_TEXT_STYLE notification:
-        //      0. Get data
-        //      1. Create Notification Channel for O+
-        //      2. Build the BIG_TEXT_STYLE
-        //      3. Set up Intent / Pending Intent for notification
-        //      4. Build and issue the notification
-
-        // 0. Get data
-        val mainNotificationText = location?.toText() ?: getString(R.string.no_location_text)
+        val mainNotificationText = "Radarin is tracking your location" ?: getString(R.string.no_location_text)
         val titleText = getString(R.string.app_name)
 
         // 1. Create Notification Channel for O+ and beyond devices (26+).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
             val notificationChannel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID, titleText, NotificationManager.IMPORTANCE_DEFAULT
+                NOTIFICATION_CHANNEL_ID, titleText, NotificationManager.IMPORTANCE_LOW
             )
 
             // Adds NotificationChannel to system. Attempting to create an
@@ -347,7 +339,7 @@ class ForegroundOnlyLocationService : Service() {
             .setStyle(bigTextStyle)
             .setContentTitle(titleText)
             .setContentText(mainNotificationText)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.logo)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -360,6 +352,7 @@ class ForegroundOnlyLocationService : Service() {
                 getString(R.string.stop_location_updates_button_text),
                 servicePendingIntent
             )
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
