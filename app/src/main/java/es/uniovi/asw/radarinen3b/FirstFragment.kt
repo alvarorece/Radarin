@@ -105,6 +105,7 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             val action = FirstFragmentDirections.actionFirstFragmentToQrLoginFragment()
             view.findNavController().navigate(action)
         } else {
+            (requireActivity() as MainActivity).hideSettings(false)
             model.isBanned.value = false;
             model.user = MutableLiveData<User>(User(webIdPref!!, privatePref!!))
             model.isBanned.observeForever { if (it == true) logOut() }

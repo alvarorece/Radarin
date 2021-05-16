@@ -28,8 +28,8 @@ class MainActivity : AppCompatActivity(), SavedLocationDialogFragment.SavedLocat
         val view = binding.root
         setContentView(view)
         setSupportActionBar(binding.toolbar)
-        val firstStart: Boolean = true
-
+        val pref = getPreferences(Context.MODE_PRIVATE)
+        val firstStart = pref.getBoolean(getString(R.string.first_start_preference), true)
         if (firstStart) {
             val intent = Intent(this, MainIntroActivity::class.java)
             startActivityForResult(intent, REQUEST_CODE_INTRO)
@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity(), SavedLocationDialogFragment.SavedLocat
                 }
                 (supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment)
                     .findNavController().navigate(R.id.qrLoginFragment)
+                hideSettings(true)
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -85,22 +86,27 @@ class MainActivity : AppCompatActivity(), SavedLocationDialogFragment.SavedLocat
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_INTRO) {
             if (resultCode == RESULT_OK) {
-//                PreferenceManager.getDefaultSharedPreferences(this).edit()
-//                    .putBoolean(PREF_KEY_FIRST_START, false)
-//                    .apply()
+                val pref = getPreferences(Context.MODE_PRIVATE)
+                with(pref.edit()) {
+                    putBoolean(getString(R.string.first_start_preference), false)
+                    apply()
+                }
             } else {
-//                PreferenceManager.getDefaultSharedPreferences(this).edit()
-//                    .putBoolean(PREF_KEY_FIRST_START, true)
-//                    .apply()
-//                //User cancelled the intro so we'll finish this activity too.
-//                finish()
+                val pref = getPreferences(Context.MODE_PRIVATE)
+                with(pref.edit()) {
+                    putBoolean(getString(R.string.first_start_preference), true)
+                    apply()
+                }
+                finish()
             }
         }
     }
 
     fun hideSettings(shouldHide: Boolean) {
-        toHide01.isVisible = !shouldHide
-        toHide02.isVisible = !shouldHide
+        if (this::toHide01.isInitialized)
+            toHide01.isVisible = !shouldHide
+        if (this::toHide02.isInitialized)
+            toHide02.isVisible = !shouldHide
     }
 
     fun showSettings() {
