@@ -41,7 +41,7 @@
             android:clickable="true"
             android:src="@drawable/outline_mode_edit_white_24"
             app:tint="@android:color/white"
-            app:backgroundTint="@color/purple_200"
+            app:backgroundTint="@color/blue_theme"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:rippleColor="#FDF6F6" />
