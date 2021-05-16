@@ -70,7 +70,7 @@ class QrLoginFragment : Fragment() {
         if (allPermissionsGranted()) {
             startCamera()
         } else {
-            requireActivity().requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
+            requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
@@ -146,6 +146,7 @@ class QrLoginFragment : Fragment() {
         requestCode: Int, permissions: Array<String>, grantResults:
         IntArray
     ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
                 startCamera()

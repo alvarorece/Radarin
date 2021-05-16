@@ -31,12 +31,12 @@ class OfflineFriendsFragment : Fragment() {
         binding = FragmentOfflineFriendsBinding.inflate(inflater, container, false)
         val view = binding.root
         val divider =
-            DividerItemDecoration(binding.recyclerVOnline.context, DividerItemDecoration.VERTICAL)
+            DividerItemDecoration(binding.recyclerVOffline.context, DividerItemDecoration.VERTICAL)
         binding.lifecycleOwner = this
         binding.viewModel = model
-        binding.recyclerVOnline.addItemDecoration(divider)
-        binding.recyclerVOnline.adapter = CustomAdapter(::friendOpenMaps)
-        binding.recyclerVOnline.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerVOffline.addItemDecoration(divider)
+        binding.recyclerVOffline.adapter = CustomAdapter(::friendOpenMaps)
+        binding.recyclerVOffline.layoutManager = LinearLayoutManager(requireContext())
         val lClient = LocationServices.getFusedLocationProviderClient(requireContext())
         binding.swipe.setOnRefreshListener {
             lClient.lastLocation.addOnSuccessListener { l ->

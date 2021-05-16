@@ -22,6 +22,7 @@ class MainActivity : AppCompatActivity(), SavedLocationDialogFragment.SavedLocat
         val view = binding.root
         setContentView(view)
         setSupportActionBar(binding.toolbar)
+
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

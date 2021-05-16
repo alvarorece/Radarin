@@ -51,6 +51,7 @@ class FriendsViewModel : ViewModel() {
             } catch (e: Exception) {
                 _status.value = FriendsStatus.ERROR
                 _users.value = listOf()
+                _offlineUsers.value = listOf()
             }
         }
     }
@@ -65,10 +66,12 @@ class FriendsViewModel : ViewModel() {
         val webId = user.value?.webId ?: throw Exception("No id init")
         val friendsTask = async(Dispatchers.IO) { RDFStore.getFriends(webId) }
         val friends = friendsTask.await()
+        if (friends.isEmpty())
+            return@coroutineScope listOf<Friend>()
         val locationResponses = (async(Dispatchers.IO) {
             friends.map { fr -> LocationsService.api.getLocation(fr.webId, true) }
         }).await()
-        val banned = locationResponses.all { lR -> lR.code() == 401 }
+        val banned = friends.isNotEmpty() && locationResponses.all { lR -> lR.code() == 401 }
         if (banned) {
             isBanned.value = banned
             return@coroutineScope listOf<Friend>()
