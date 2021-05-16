@@ -305,7 +305,11 @@ class FirstFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeList
             putString(getString(R.string.privateKey_preference), "")
             commit()
         }
-        Snackbar.make(requireView(), "Logged out! Please, scan QR again", Snackbar.LENGTH_INDEFINITE)
+        Snackbar.make(
+            requireView(),
+            "Logged out! Please, scan QR again",
+            Snackbar.LENGTH_INDEFINITE
+        )
             .setAction("OK") {
             }
             .show()

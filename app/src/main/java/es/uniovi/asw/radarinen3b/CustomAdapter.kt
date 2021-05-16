@@ -8,7 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import es.uniovi.asw.radarinen3b.databinding.RecyclerViewItemBinding
 import es.uniovi.asw.radarinen3b.models.Friend
 
-class CustomAdapter() :
+class CustomAdapter(private val onClick: (Friend) -> Unit) :
     ListAdapter<Friend, CustomAdapter.ViewHolder>(DiffCallback) {
     private lateinit var binding: RecyclerViewItemBinding
 
@@ -16,10 +16,14 @@ class CustomAdapter() :
      * Provide a reference to the type of views that you are using
      * (custom ViewHolder).
      */
-    class ViewHolder(private var binding: RecyclerViewItemBinding) :
+    class ViewHolder(private var binding: RecyclerViewItemBinding, val onClick: (Friend) -> Unit) :
         RecyclerView.ViewHolder(binding.root) {
+
         fun bind(friend: Friend) {
             binding.friend = friend
+            itemView.setOnClickListener {
+                onClick(friend)
+            }
             // This is important, because it forces the data binding to execute immediately,
             // which allows the RecyclerView to make the correct view size measurements
             binding.executePendingBindings()
@@ -43,7 +47,7 @@ class CustomAdapter() :
         // Create a new view, which defines the UI of the list item
         binding = RecyclerViewItemBinding.inflate(LayoutInflater.from(viewGroup.context))
         val view = binding.root
-        return ViewHolder(binding)
+        return ViewHolder(binding, onClick)
     }
 
     // Replace the contents of a view (invoked by the layout manager)
