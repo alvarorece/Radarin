@@ -10,6 +10,7 @@
     <string name="hello_first_fragment">Hello first fragment</string>
     <string name="hello_second_fragment">Hello second fragment. Arg: %1$s</string>
     <string name="webId_preference">es.uniovi.asw.radarinen3b.webid</string>
+    <string name="first_start_preference">es.uniovi.asw.radarinen3b.firststart</string>
     <string name="privateKey_preference">es.uniovi.asw.radarinen3b.privatekey</string>
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>

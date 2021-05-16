@@ -339,7 +339,7 @@ class ForegroundOnlyLocationService : Service() {
             .setStyle(bigTextStyle)
             .setContentTitle(titleText)
             .setContentText(mainNotificationText)
-            .setSmallIcon(R.drawable.logo)
+            .setSmallIcon(R.drawable.logo_circular)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
